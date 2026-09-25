@@ -197,7 +197,7 @@
         // Removed Firebase imports for standalone deployment
 
         let userApplications = {};
-        const STORAGE_KEY = 'tryapp_applications';
+        // Убрали localStorage, чтобы при обновлении страницы всё сбрасывалось
 
         // DOM Elements
         const notif = document.getElementById('notification');
@@ -216,32 +216,21 @@
         let clickedProductId = null;
         let timerInterval = null;
 
-        // Load applications from localStorage
+        // Load applications (Теперь просто запускает интерфейс с чистого листа)
         function loadApplications() {
-            try {
-                const stored = localStorage.getItem(STORAGE_KEY);
-                if (stored) {
-                    userApplications = JSON.parse(stored);
-                }
-            } catch (e) {
-                console.error("Could not read from localStorage");
-            }
+            // Оставляем пустой объект, чтобы заявки сбрасывались при обновлении
+            userApplications = {};
             updateButtonsState();
             showUI();
         }
 
-        // Save application to localStorage
+        // Save application (Сохраняет только во временную память до обновления страницы)
         function saveApplication(productId) {
             userApplications[productId] = {
                 productId: productId,
                 appliedAt: Date.now(),
                 status: 'applied'
             };
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(userApplications));
-            } catch (e) {
-                console.error("Could not save to localStorage");
-            }
         }
 
         function showUI() {
@@ -276,7 +265,9 @@
             // Dynamically inject the SMEG product card
             const smegCardHTML = `
                 <div class="bg-white rounded-2xl p-2 shadow-sm flex flex-col animate-fade-slide-in">
-                    <img src="https://i.ibb.co/6c0vh8W3/smeg1.png" alt="Smeg Appliance" class="w-full aspect-square object-cover rounded-xl mb-2 bg-gray-100">
+                    <div class="w-full aspect-square bg-gray-100 rounded-xl mb-2 overflow-hidden flex items-center justify-center">
+                        <img src="https://i.ibb.co/5W6z28w1/smeggg.webp" alt="Smeg Appliance" class="w-full h-full object-cover mix-blend-multiply">
+                    </div>
                     <div class="px-1 flex-1">
                         <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SMEG</p>
                         <h3 class="text-xs font-bold text-gray-900 leading-tight mb-3">Coffee Machine</h3>
