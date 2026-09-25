@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TryApp - Mobile Tester</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Добавляем библиотеку для конфетти -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+        }
+
+        /* Hide Scrollbar */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Notification Animations */
+        .notif-enter {
+            animation: slideDown 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        
+        .notif-exit {
+            animation: slideUp 0.4s ease-in forwards;
+        }
+
+        @keyframes slideDown {
+            0% { transform: translateY(-150%); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-150%); opacity: 0; }
+        }
+
+        /* Packing Animation */
+        .animate-pack {
+            animation: packBox 1.5s infinite;
+        }
+
+        @keyframes packBox {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-20px) scale(1.1); }
+            75% { transform: rotate(-5deg); }
+            85% { transform: rotate(5deg); }
+        }
+
+        /* FIXED: Truck Animation - Smooth speed, absolute pixels to avoid flashing, and flipped to face right */
+        @keyframes driveAcross {
+            0% { transform: translateX(-250px) scaleX(-1); }
+            100% { transform: translateX(250px) scaleX(-1); }
+        }
+
+        .animate-truck {
+            display: inline-block; /* Required for transforms on text/emoji */
+            animation: driveAcross 1.25s linear forwards; /* linear for smooth constant speed, twice as fast */
+        }
+        
+        /* Fade in for success modal */
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Animation for dynamically added items */
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-fade-slide-in {
+            animation: fadeSlideIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="w-full max-w-[400px] mx-auto min-h-screen bg-white relative flex flex-col shadow-xl">
+        
+        <!-- Notification Banner -->
+        <div id="notification" class="absolute top-4 sm:top-6 left-4 right-4 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 z-40 transform -translate-y-[150%] opacity-0 flex items-start gap-3 transition-transform">
+            <div class="bg-blue-100 p-2 rounded-full text-xl shrink-0">🔔</div>
+            <div class="flex-1">
+                <h4 class="font-bold text-sm text-gray-900 leading-tight">New SMEG Campaign available for testing!</h4>
+                <p class="text-xs text-gray-500 mt-1">Limited spots available. Apply now.</p>
+            </div>
+            <button id="close-notif" class="text-gray-400 hover:text-gray-900 shrink-0 p-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <!-- Header -->
+        <header class="pt-6 pb-2 px-5 bg-white z-30 sticky top-0 sm:pt-10 border-b border-gray-100">
+            <div class="flex justify-between items-center mb-4">
+                <h1 class="font-extrabold text-2xl tracking-tighter">TRY<span class="text-blue-600">APP</span></h1>
+                <div class="flex items-center gap-3">
+                    <div class="text-xs font-bold text-gray-600 flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 shadow-sm">
+                        Tester Rating 4.8/5 ⭐
+                    </div>
+                    <div class="w-14 h-14 rounded-full overflow-hidden shadow-sm border-2 border-gray-100 shrink-0">
+                        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSjXjau74vA5S8ZsakvDajX520_MHqXjAFjoyULX7ummg&s=10" alt="Profile" class="w-full h-full object-cover">
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button class="px-4 py-1.5 bg-black text-white text-sm font-bold rounded-full">Explore</button>
+                <button class="px-4 py-1.5 bg-gray-100 text-gray-600 text-sm font-bold rounded-full">Profile</button>
+            </div>
+        </header>
+
+        <!-- Main Feed -->
+        <main class="flex-1 overflow-y-auto no-scrollbar p-4 pb-12 bg-gray-50 relative">
+            
+            <!-- Loading Indicator for Firebase -->
+            <div id="loading-indicator" class="flex justify-center items-center py-8">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            </div>
+
+            <div id="products-grid" class="grid grid-cols-2 gap-3 hidden">
+                <!-- Product 2: Dyson -->
+                <div class="bg-white rounded-2xl p-2 shadow-sm flex flex-col">
+                    <img src="https://i.ibb.co/XfXwKBxp/be9f3be3d0b5304449d90c39a640985c8088e1a51fc6adb150bd8e2b766ed9b8.png" alt="Dyson Supersonic" class="w-full aspect-square object-cover rounded-xl mb-2 bg-gray-100">
+                    <div class="px-1 flex-1">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DYSON</p>
+                        <h3 class="text-xs font-bold text-gray-900 leading-tight mb-3">Supersonic</h3>
+                    </div>
+                    <button data-id="dyson-supersonic" class="apply-btn w-full py-2 bg-black text-white rounded-xl text-xs font-bold transition-all active:scale-95">Apply</button>
+                </div>
+
+                <!-- Product 3: Nike -->
+                <div class="bg-white rounded-2xl p-2 shadow-sm flex flex-col">
+                    <img src="https://i.ibb.co/JjHDh2RT/nike.avif" alt="Nike Shoes" class="w-full aspect-square object-cover rounded-xl mb-2 bg-gray-100">
+                    <div class="px-1 flex-1">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">NIKE</p>
+                        <h3 class="text-xs font-bold text-gray-900 leading-tight mb-3">Air Sneakers</h3>
+                    </div>
+                    <button data-id="nike-sneakers" class="apply-btn w-full py-2 bg-black text-white rounded-xl text-xs font-bold transition-all active:scale-95">Apply</button>
+                </div>
+
+                <!-- Product 4: Sony -->
+                <div class="bg-white rounded-2xl p-2 shadow-sm flex flex-col">
+                    <img src="https://i.ibb.co/5g8pD208/sony.png" alt="Sony Headphones" class="w-full aspect-square object-cover rounded-xl mb-2 bg-gray-100">
+                    <div class="px-1 flex-1">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SONY</p>
+                        <h3 class="text-xs font-bold text-gray-900 leading-tight mb-3">WH-1000XM5</h3>
+                    </div>
+                    <button data-id="sony-headphones" class="apply-btn w-full py-2 bg-black text-white rounded-xl text-xs font-bold transition-all active:scale-95">Apply</button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Overlay Animation Container -->
+        <div id="delivery-overlay" class="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm hidden flex-col items-center justify-center p-6">
+            
+            <!-- Stage 1: Preparing Box -->
+            <div id="box-container" class="flex flex-col items-center justify-center w-full">
+                <div class="text-[80px] animate-pack mb-4">📦</div>
+                <p class="font-bold text-gray-600 text-sm animate-pulse text-center">Preparing your package...</p>
+            </div>
+
+            <!-- Stage 2: Truck Driving (Smooth animation, container overflow hidden) -->
+            <div id="truck-container" class="hidden absolute w-full overflow-hidden flex items-center justify-center">
+                <div id="truck" class="text-[100px]">🚚</div>
+            </div>
+
+            <!-- Stage 3: Success Message (FIXED: Properly Centered) -->
+            <div id="success-container" class="hidden flex-col items-center justify-center text-center w-full max-w-sm px-4 mx-auto">
+                <!-- Added mx-auto here to ensure horizontal centering in all flex contexts -->
+                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6 mx-auto shadow-sm">
+                    <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <h2 class="text-2xl font-black text-gray-900 mb-3 text-center w-full">Approved for testing!</h2>
+                <div class="mb-8 w-full flex flex-col items-center justify-center">
+                    <p class="text-xs text-gray-500 uppercase tracking-widest font-bold mb-2">Time until delivery</p>
+                    <p id="delivery-timer" class="text-5xl font-mono font-black text-gray-900 tabular-nums tracking-tighter">03:00:00</p>
+                </div>
+                <button id="close-overlay-btn" class="w-full py-3.5 bg-black text-white rounded-xl font-bold active:scale-95 transition-transform">
+                    Return to Feed
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Configuration & Init
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { projectId: 'demo-project' };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        let currentUser = null;
+        let userApplications = {};
+
+        // DOM Elements
+        const notif = document.getElementById('notification');
+        const closeNotifBtn = document.getElementById('close-notif');
+        const overlay = document.getElementById('delivery-overlay');
+        const boxContainer = document.getElementById('box-container');
+        const truckContainer = document.getElementById('truck-container');
+        const truck = document.getElementById('truck');
+        const successContainer = document.getElementById('success-container');
+        const deliveryTimer = document.getElementById('delivery-timer');
+        const closeOverlayBtn = document.getElementById('close-overlay-btn');
+        const productsGrid = document.getElementById('products-grid');
+        const loadingIndicator = document.getElementById('loading-indicator');
+
+        let clickedButton = null;
+        let clickedProductId = null;
+        let timerInterval = null;
+
+        // 1. Notification Drop & Dynamic Injection
+        setTimeout(() => {
+            notif.classList.add('notif-enter');
+            
+            // Dynamically inject the SMEG product card
+            const smegCardHTML = `
+                <div class="bg-white rounded-2xl p-2 shadow-sm flex flex-col animate-fade-slide-in">
+                    <img src="https://i.ibb.co/6c0vh8W3/smeg1.png" alt="Smeg Appliance" class="w-full aspect-square object-cover rounded-xl mb-2 bg-gray-100">
+                    <div class="px-1 flex-1">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">SMEG</p>
+                        <h3 class="text-xs font-bold text-gray-900 leading-tight mb-3">Coffee Machine</h3>
+                    </div>
+                    <button data-id="smeg-coffee-machine" class="apply-btn w-full py-2 bg-black text-white rounded-xl text-xs font-bold transition-all active:scale-95">Apply</button>
+                </div>
+            `;
+            
+            if (!document.querySelector('[data-id="smeg-coffee-machine"]')) {
+                productsGrid.insertAdjacentHTML('afterbegin', smegCardHTML);
+                // Update button state immediately if user had already applied in previous sessions
+                if (userApplications['smeg-coffee-machine']) {
+                    const smegBtn = document.querySelector('[data-id="smeg-coffee-machine"]');
+                    setButtonApplied(smegBtn);
+                }
+            }
+        }, 5000);
+
+        closeNotifBtn.addEventListener('click', () => {
+            notif.classList.remove('notif-enter');
+            notif.classList.add('notif-exit');
+        });
+
+        // 2. Authentication & Data Loading
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth error:", error);
+                showUI(); // Show UI anyway for fallback
+            }
+        }
+        
+        initAuth();
+
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            if (user) {
+                loadApplications(user.uid);
+            } else {
+                showUI();
+            }
+        });
+
+        function loadApplications(userId) {
+            const appsRef = collection(db, 'artifacts', appId, 'users', userId, 'applications');
+            const q = query(appsRef);
+            
+            onSnapshot(q, (snapshot) => {
+                userApplications = {};
+                snapshot.forEach((docSnap) => {
+                    userApplications[docSnap.id] = docSnap.data();
+                });
+                updateButtonsState();
+                showUI();
+            }, (error) => {
+                console.error("Firestore error:", error);
+                showUI();
+            });
+        }
+
+        function showUI() {
+            loadingIndicator.classList.add('hidden');
+            productsGrid.classList.remove('hidden');
+        }
+
+        function updateButtonsState() {
+            // Querying freshly to include dynamically added buttons
+            const currentApplyBtns = document.querySelectorAll('.apply-btn');
+            currentApplyBtns.forEach(btn => {
+                const productId = btn.getAttribute('data-id');
+                if (userApplications[productId]) {
+                    setButtonApplied(btn);
+                }
+            });
+        }
+
+        function setButtonApplied(btn) {
+            btn.innerHTML = 'Applied';
+            btn.classList.remove('bg-black', 'text-white', 'active:scale-95');
+            btn.classList.add('bg-gray-200', 'text-gray-400', 'cursor-not-allowed');
+            btn.disabled = true;
+        }
+
+        // 3. Application Flow & Animations (Using Event Delegation)
+        productsGrid.addEventListener('click', async function(event) {
+            const btn = event.target.closest('.apply-btn');
+            if (!btn || btn.disabled) return;
+            if (!currentUser) return; // Guard clause
+            
+            clickedButton = btn;
+            clickedProductId = btn.getAttribute('data-id');
+            
+            // Save to Firestore first
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'applications', clickedProductId);
+                    await setDoc(docRef, {
+                        productId: clickedProductId,
+                        appliedAt: Date.now(),
+                        status: 'applied'
+                    });
+                } catch (error) {
+                    console.error("Error saving application:", error);
+                    return; // Stop animation if save fails
+                }
+
+                // Reset Animation states
+                boxContainer.classList.remove('hidden');
+                truckContainer.classList.add('hidden');
+                successContainer.classList.add('hidden');
+                truck.classList.remove('animate-truck');
+                successContainer.classList.remove('fade-in');
+                
+                // Show Overlay
+                overlay.classList.remove('hidden');
+                overlay.classList.add('flex');
+
+                // Sequence 1: Box packing (1.5 seconds)
+                setTimeout(() => {
+                    boxContainer.classList.add('hidden');
+                    
+                    // Sequence 2: Truck driving (Smooth CSS keyframe, flipped)
+                    truckContainer.classList.remove('hidden');
+                    // Force reflow to restart animation reliably
+                    void truck.offsetWidth; 
+                    truck.classList.add('animate-truck');
+                    
+                    // Sequence 3: Success state (waits for truck to finish)
+                    setTimeout(() => {
+                        truckContainer.classList.add('hidden');
+                        successContainer.classList.remove('hidden');
+                        successContainer.classList.add('flex', 'fade-in');
+                        
+                        // Start the 3-hour countdown timer
+                        let timeLeft = 3 * 60 * 60; // 3 hours in seconds
+                        
+                        function updateTimerDisplay() {
+                            const h = String(Math.floor(timeLeft / 3600)).padStart(2, '0');
+                            const m = String(Math.floor((timeLeft % 3600) / 60)).padStart(2, '0');
+                            const s = String(timeLeft % 60).padStart(2, '0');
+                            deliveryTimer.textContent = `${h}:${m}:${s}`;
+                        }
+                        
+                        updateTimerDisplay(); // Initial display
+                        if (timerInterval) clearInterval(timerInterval);
+                        timerInterval = setInterval(() => {
+                            if (timeLeft > 0) {
+                                timeLeft--;
+                                updateTimerDisplay();
+                            } else {
+                                clearInterval(timerInterval);
+                            }
+                        }, 1000);
+
+                        // Trigger Confetti
+                        confetti({
+                            particleCount: 150,
+                            spread: 70,
+                            origin: { y: 0.6 },
+                            colors: ['#26ccff', '#a25afd', '#ff5e7e', '#88ff5a', '#fcff42', '#ffa62d', '#ff36ff']
+                        });
+                        
+                        // Update Button State behind overlay
+                        setButtonApplied(clickedButton);
+
+                    }, 1250); // Matches truck animation duration
+                }, 1500); // Matches box packing duration
+        });
+
+        // Close Overlay & reset everything
+        closeOverlayBtn.addEventListener('click', () => {
+            overlay.classList.add('hidden');
+            overlay.classList.remove('flex');
+            if (timerInterval) clearInterval(timerInterval);
+        });
+    </script>
+</body>
+</html>
