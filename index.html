@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TryApp - Mobile Tester</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Добавляем библиотеку для конфетти -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     
@@ -172,20 +171,18 @@
                 <p class="font-bold text-gray-600 text-sm animate-pulse text-center">Preparing your package...</p>
             </div>
 
-            <!-- Stage 2: Truck Driving (Smooth animation, container overflow hidden) -->
+            <!-- Stage 2: Truck Driving -->
             <div id="truck-container" class="hidden absolute w-full overflow-hidden flex items-center justify-center">
                 <div id="truck" class="text-[100px]">🚚</div>
             </div>
 
-            <!-- Stage 3: Success Message (FIXED: Properly Centered) -->
+            <!-- Stage 3: Success Message -->
             <div id="success-container" class="hidden flex-col items-center justify-center text-center w-full max-w-sm px-4 mx-auto">
-                <!-- Added mx-auto here to ensure horizontal centering in all flex contexts -->
                 <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6 mx-auto shadow-sm">
                     <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
                 </div>
                 <h2 class="text-2xl font-black text-gray-900 mb-3 text-center w-full">Approved for testing!</h2>
                 <div class="mb-8 w-full flex flex-col items-center justify-center">
-                    <p class="text-xs text-gray-500 uppercase tracking-widest font-bold mb-2">Time until delivery</p>
                     <p id="delivery-timer" class="text-5xl font-mono font-black text-gray-900 tabular-nums tracking-tighter">03:00:00</p>
                 </div>
                 <button id="close-overlay-btn" class="w-full py-3.5 bg-black text-white rounded-xl font-bold active:scale-95 transition-transform">
@@ -197,19 +194,10 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Removed Firebase imports for standalone deployment
 
-        // Firebase Configuration & Init
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { projectId: 'demo-project' };
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-        let currentUser = null;
         let userApplications = {};
+        const STORAGE_KEY = 'tryapp_applications';
 
         // DOM Elements
         const notif = document.getElementById('notification');
@@ -228,7 +216,60 @@
         let clickedProductId = null;
         let timerInterval = null;
 
-        // 1. Notification Drop & Dynamic Injection
+        // Load applications from localStorage
+        function loadApplications() {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    userApplications = JSON.parse(stored);
+                }
+            } catch (e) {
+                console.error("Could not read from localStorage");
+            }
+            updateButtonsState();
+            showUI();
+        }
+
+        // Save application to localStorage
+        function saveApplication(productId) {
+            userApplications[productId] = {
+                productId: productId,
+                appliedAt: Date.now(),
+                status: 'applied'
+            };
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(userApplications));
+            } catch (e) {
+                console.error("Could not save to localStorage");
+            }
+        }
+
+        function showUI() {
+            loadingIndicator.classList.add('hidden');
+            productsGrid.classList.remove('hidden');
+        }
+
+        function updateButtonsState() {
+            const currentApplyBtns = document.querySelectorAll('.apply-btn');
+            currentApplyBtns.forEach(btn => {
+                const productId = btn.getAttribute('data-id');
+                if (userApplications[productId]) {
+                    setButtonApplied(btn);
+                }
+            });
+        }
+
+        function setButtonApplied(btn) {
+            btn.innerHTML = 'Applied';
+            btn.classList.remove('bg-black', 'text-white', 'active:scale-95');
+            btn.classList.add('bg-gray-200', 'text-gray-400', 'cursor-not-allowed');
+            btn.disabled = true;
+        }
+
+        // Initialize App
+        loadApplications();
+
+        // Notification Drop & Dynamic Injection
         setTimeout(() => {
             notif.classList.add('notif-enter');
             
@@ -259,103 +300,27 @@
             notif.classList.add('notif-exit');
         });
 
-        // 2. Authentication & Data Loading
-        async function initAuth() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Auth error:", error);
-                showUI(); // Show UI anyway for fallback
-            }
-        }
-        
-        initAuth();
-
-        onAuthStateChanged(auth, (user) => {
-            currentUser = user;
-            if (user) {
-                loadApplications(user.uid);
-            } else {
-                showUI();
-            }
-        });
-
-        function loadApplications(userId) {
-            const appsRef = collection(db, 'artifacts', appId, 'users', userId, 'applications');
-            const q = query(appsRef);
-            
-            onSnapshot(q, (snapshot) => {
-                userApplications = {};
-                snapshot.forEach((docSnap) => {
-                    userApplications[docSnap.id] = docSnap.data();
-                });
-                updateButtonsState();
-                showUI();
-            }, (error) => {
-                console.error("Firestore error:", error);
-                showUI();
-            });
-        }
-
-        function showUI() {
-            loadingIndicator.classList.add('hidden');
-            productsGrid.classList.remove('hidden');
-        }
-
-        function updateButtonsState() {
-            // Querying freshly to include dynamically added buttons
-            const currentApplyBtns = document.querySelectorAll('.apply-btn');
-            currentApplyBtns.forEach(btn => {
-                const productId = btn.getAttribute('data-id');
-                if (userApplications[productId]) {
-                    setButtonApplied(btn);
-                }
-            });
-        }
-
-        function setButtonApplied(btn) {
-            btn.innerHTML = 'Applied';
-            btn.classList.remove('bg-black', 'text-white', 'active:scale-95');
-            btn.classList.add('bg-gray-200', 'text-gray-400', 'cursor-not-allowed');
-            btn.disabled = true;
-        }
-
-        // 3. Application Flow & Animations (Using Event Delegation)
+        // Application Flow & Animations (Using Event Delegation)
         productsGrid.addEventListener('click', async function(event) {
             const btn = event.target.closest('.apply-btn');
             if (!btn || btn.disabled) return;
-            if (!currentUser) return; // Guard clause
             
             clickedButton = btn;
             clickedProductId = btn.getAttribute('data-id');
             
-            // Save to Firestore first
-            try {
-                const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'applications', clickedProductId);
-                    await setDoc(docRef, {
-                        productId: clickedProductId,
-                        appliedAt: Date.now(),
-                        status: 'applied'
-                    });
-                } catch (error) {
-                    console.error("Error saving application:", error);
-                    return; // Stop animation if save fails
-                }
+            // Save application state locally
+            saveApplication(clickedProductId);
 
-                // Reset Animation states
-                boxContainer.classList.remove('hidden');
-                truckContainer.classList.add('hidden');
-                successContainer.classList.add('hidden');
-                truck.classList.remove('animate-truck');
-                successContainer.classList.remove('fade-in');
-                
-                // Show Overlay
-                overlay.classList.remove('hidden');
-                overlay.classList.add('flex');
+            // Reset Animation states
+            boxContainer.classList.remove('hidden');
+            truckContainer.classList.add('hidden');
+            successContainer.classList.add('hidden');
+            truck.classList.remove('animate-truck');
+            successContainer.classList.remove('fade-in');
+            
+            // Show Overlay
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
 
                 // Sequence 1: Box packing (1.5 seconds)
                 setTimeout(() => {
@@ -405,8 +370,8 @@
                         // Update Button State behind overlay
                         setButtonApplied(clickedButton);
 
-                    }, 1250); // Matches truck animation duration
-                }, 1500); // Matches box packing duration
+                    }, 1250); 
+                }, 1500); 
         });
 
         // Close Overlay & reset everything
